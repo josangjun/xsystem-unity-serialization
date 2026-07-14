@@ -1,0 +1,20 @@
+{
+  "name": "xsystem.serialization",
+  "displayName": "XSystem Serialization",
+  "version": "1.0.0",
+  "description": "Serializable containers, asset links, and inspector attributes for XSystem.",
+  "keywords": [
+    "xsystem",
+    "serialization",
+    "attributes"
+  ],
+  "dependencies": {
+    "com.unity.addressables": "2.9.1"
+  },
+  "author": {
+    "name": "sangjun jo",
+    "email": "josangjun@outlook.com",
+    "url": "https://github.com/josangjun/unity-shared-settings#package"
+  },
+  "license": "MIT"
+}
