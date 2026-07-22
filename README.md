@@ -4,6 +4,16 @@ Reusable serialized containers, soft asset links, and inspector attributes for U
 
 The public API remains in the `XSystem` namespace.
 
+`[ShowInInspector]` displays a property or a non-serialized private field in the Unity Inspector. Properties without a setter are read-only; supported primitive, enum, vector, color, and Unity object values can be edited.
+
+```csharp
+[ShowInInspector]
+private int _runtimeValue;
+
+[ShowInInspector]
+public float CurrentSpeed => _currentSpeed;
+```
+
 ## What It Provides
 
 `xsystem.serialization` contains Unity-focused serialization utilities that are useful without the rest of XSystem Framework.
