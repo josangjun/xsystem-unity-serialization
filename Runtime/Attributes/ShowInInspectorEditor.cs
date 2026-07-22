@@ -13,13 +13,65 @@ namespace XSystem.InternalEditor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            base.OnInspectorGUI();
-            var members = GetMembers(target.GetType());
-            if (members.Count == 0) return;
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Shown In Inspector", EditorStyles.boldLabel);
-            foreach (var member in members) DrawMember(member);
+            var serializedProperties = GetSerializedProperties();
+            var serializedNames = new HashSet<string>(serializedProperties);
+            var drawnNames = new HashSet<string>();
+
+            if (serializedNames.Contains("m_Script"))
+            {
+                using (new EditorGUI.DisabledScope(true))
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("m_Script"));
+                drawnNames.Add("m_Script");
+            }
+
+            foreach (var member in GetOrderedMembers(target.GetType()))
+            {
+                if (drawnNames.Contains(member.Name)) continue;
+
+                if (serializedNames.Contains(member.Name))
+                {
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty(member.Name), true);
+                    drawnNames.Add(member.Name);
+                    continue;
+                }
+
+                if (!IsShowInInspectorMember(member)) continue;
+                DrawMember(member);
+                drawnNames.Add(member.Name);
+            }
+
+            // Preserve serialized properties that do not have a matching reflected member.
+            foreach (var propertyName in serializedProperties)
+            {
+                if (drawnNames.Contains(propertyName)) continue;
+                EditorGUILayout.PropertyField(serializedObject.FindProperty(propertyName), true);
+            }
+
             serializedObject.ApplyModifiedProperties();
+        }
+
+        private static bool IsShowInInspectorMember(MemberInfo member)
+        {
+            if (!member.IsDefined(typeof(ShowInInspectorAttribute), true)) return false;
+            if (member is FieldInfo field)
+                return !field.IsStatic && !field.IsDefined(typeof(HideInInspector), true);
+            if (member is PropertyInfo property)
+                return property.GetIndexParameters().Length == 0 && property.GetMethod != null;
+            return false;
+        }
+
+        private List<string> GetSerializedProperties()
+        {
+            var result = new List<string>();
+            var iterator = serializedObject.GetIterator();
+            var enterChildren = true;
+            while (iterator.NextVisible(enterChildren))
+            {
+                enterChildren = false;
+                result.Add(iterator.name);
+            }
+
+            return result;
         }
 
         private void DrawMember(MemberInfo member)
@@ -61,25 +113,23 @@ namespace XSystem.InternalEditor
             }
         }
 
-        private static List<MemberInfo> GetMembers(Type type)
+        private static List<MemberInfo> GetOrderedMembers(Type type)
         {
             var result = new List<MemberInfo>();
-            var names = new HashSet<string>();
+            var hierarchy = new Stack<Type>();
             for (var current = type; current != null && current != typeof(UnityEngine.Object); current = current.BaseType)
+                hierarchy.Push(current);
+
+            while (hierarchy.Count > 0)
             {
+                var current = hierarchy.Pop();
                 const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-                foreach (var field in current.GetFields(flags))
-                {
-                    if (field.IsStatic || field.IsDefined(typeof(HideInInspector), true) || !field.IsDefined(typeof(ShowInInspectorAttribute), true) || !names.Add(field.Name)) continue;
-                    result.Add(field);
-                }
-                foreach (var property in current.GetProperties(flags))
-                {
-                    if (property.GetIndexParameters().Length != 0 || property.GetMethod == null || !property.IsDefined(typeof(ShowInInspectorAttribute), true) || !names.Add(property.Name)) continue;
-                    result.Add(property);
-                }
+                result.AddRange(current.GetMembers(flags)
+                    .Where(member => member is FieldInfo || member is PropertyInfo)
+                    .OrderBy(member => member.MetadataToken));
             }
-            return result.OrderBy(member => member.MetadataToken).ToList();
+
+            return result;
         }
     }
 
