@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -10,6 +11,8 @@ namespace XSystem.InternalEditor
 {
     internal abstract class ShowInInspectorEditorBase : Editor
     {
+        private static readonly Dictionary<Type, List<MemberInfo>> OrderedMembersCache = new Dictionary<Type, List<MemberInfo>>();
+
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -24,7 +27,7 @@ namespace XSystem.InternalEditor
                 drawnNames.Add("m_Script");
             }
 
-            foreach (var member in GetOrderedMembers(target.GetType()))
+            foreach (var member in GetOrderedMembers(target))
             {
                 if (drawnNames.Contains(member.Name)) continue;
 
@@ -113,11 +116,16 @@ namespace XSystem.InternalEditor
             }
         }
 
-        private static List<MemberInfo> GetOrderedMembers(Type type)
+        private static List<MemberInfo> GetOrderedMembers(UnityEngine.Object target)
         {
+            var targetType = target.GetType();
+            if (OrderedMembersCache.TryGetValue(targetType, out var cachedMembers))
+                return cachedMembers;
+
             var result = new List<MemberInfo>();
             var hierarchy = new Stack<Type>();
-            for (var current = type; current != null && current != typeof(UnityEngine.Object); current = current.BaseType)
+            var sourceOrder = GetSourceOrder(target);
+            for (var current = targetType; current != null && current != typeof(UnityEngine.Object); current = current.BaseType)
                 hierarchy.Push(current);
 
             while (hierarchy.Count > 0)
@@ -126,10 +134,54 @@ namespace XSystem.InternalEditor
                 const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
                 result.AddRange(current.GetMembers(flags)
                     .Where(member => member is FieldInfo || member is PropertyInfo)
-                    .OrderBy(member => member.MetadataToken));
+                    .OrderBy(member => sourceOrder.TryGetValue(GetMemberKey(member), out var line) ? line : int.MaxValue)
+                    .ThenBy(member => member.MetadataToken));
+            }
+
+            OrderedMembersCache[targetType] = result;
+            return result;
+        }
+
+        private static Dictionary<string, int> GetSourceOrder(UnityEngine.Object target)
+        {
+            var result = new Dictionary<string, int>();
+            var script = target is MonoBehaviour behaviour
+                ? MonoScript.FromMonoBehaviour(behaviour)
+                : target is ScriptableObject scriptableObject
+                    ? MonoScript.FromScriptableObject(scriptableObject)
+                    : null;
+            if (script == null || string.IsNullOrEmpty(script.text)) return result;
+
+            var lines = script.text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+            var members = GetAllMembers(target.GetType());
+            foreach (var member in members)
+            {
+                var pattern = $@"\b{Regex.Escape(member.Name)}\b\s*(?:[=;{{]|=>)";
+                for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+                {
+                    if (!Regex.IsMatch(lines[lineIndex], pattern)) continue;
+                    result[GetMemberKey(member)] = lineIndex;
+                    break;
+                }
             }
 
             return result;
+        }
+
+        private static string GetMemberKey(MemberInfo member)
+        {
+            return $"{member.DeclaringType?.AssemblyQualifiedName}:{member.Name}";
+        }
+
+        private static IEnumerable<MemberInfo> GetAllMembers(Type type)
+        {
+            for (var current = type; current != null && current != typeof(UnityEngine.Object); current = current.BaseType)
+            {
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                foreach (var member in current.GetMembers(flags))
+                    if (member is FieldInfo || member is PropertyInfo)
+                        yield return member;
+            }
         }
     }
 
