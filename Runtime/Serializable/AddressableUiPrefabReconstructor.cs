@@ -5,6 +5,12 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Settings;
+#endif
+
 /// <summary>Replaces scene-only UI placeholders with their Addressables instances at runtime.</summary>
 public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
 {
@@ -64,10 +70,54 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
             }
 
             _parent ??= _editorOnlyInstance.parent;
+            _id = _editorOnlyInstance.name;
+#if UNITY_EDITOR
+            if (Application.isPlaying == false)
+            {
+                _address = GetEditorAddress(_editorOnlyInstance);
+            }
+#endif
             _siblingIndex = _editorOnlyInstance.GetSiblingIndex();
             _transform ??= new RectTransformSnapshot();
             _transform.Capture(_editorOnlyInstance);
         }
+
+#if UNITY_EDITOR
+        private static string GetEditorAddress(RectTransform instance)
+        {
+            if (instance == null)
+            {
+                return string.Empty;
+            }
+
+            GameObject source = PrefabUtility.GetCorrespondingObjectFromSource(instance.gameObject);
+            if (source == null)
+            {
+                return string.Empty;
+            }
+
+            string assetPath = AssetDatabase.GetAssetPath(source);
+            if (string.IsNullOrWhiteSpace(assetPath))
+            {
+                return string.Empty;
+            }
+
+            string guid = AssetDatabase.AssetPathToGUID(assetPath);
+            if (string.IsNullOrWhiteSpace(guid))
+            {
+                return string.Empty;
+            }
+
+            AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null)
+            {
+                return string.Empty;
+            }
+
+            AddressableAssetEntry entry = settings.FindAssetEntry(guid);
+            return entry != null && !string.IsNullOrWhiteSpace(entry.address) ? entry.address : string.Empty;
+        }
+#endif
 
         public IEnumerator Instantiate(Action<GameObject, AsyncOperationHandle<GameObject>> onCreated, MonoBehaviour owner)
         {
