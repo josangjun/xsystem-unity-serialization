@@ -75,6 +75,8 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
             if (Application.isPlaying == false)
             {
                 _address = GetEditorAddress(_editorOnlyInstance);
+                if (_editorOnlyInstance.CompareTag("EditorOnly") == false)
+                    _editorOnlyInstance.tag = "EditorOnly";
             }
 #endif
             _siblingIndex = _editorOnlyInstance.GetSiblingIndex();
@@ -163,6 +165,33 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
     {
         runtimeInstances = _runtimeInstances;
         return IsComplete;
+    }
+
+    public GameObject GetRuntimeInstance(string key)
+    {
+        if (!_runtimeInstances.TryGetValue(key, out GameObject instance))
+        {
+            Debug.LogError($"Addressable UI reconstruction is missing runtime instance: {key}.", this);
+        }
+
+        return instance;
+    }
+
+    public T GetRuntimeComponent<T>(string key) where T : Component
+    {
+        GameObject instance = GetRuntimeInstance(key);
+        if (instance == null)
+        {
+            return null;
+        }
+
+        T component = instance.GetComponent<T>();
+        if (component == null)
+        {
+            Debug.LogError($"The {key} runtime instance has no {typeof(T).Name} component.", this);
+        }
+
+        return component;
     }
 
     private void OnValidate()

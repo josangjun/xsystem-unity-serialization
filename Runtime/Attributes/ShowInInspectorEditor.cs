@@ -11,7 +11,9 @@ namespace XSystem.InternalEditor
 {
     internal abstract class ShowInInspectorEditorBase : Editor
     {
+        private const int MaxObjectDisplayDepth = 8;
         private static readonly Dictionary<Type, List<MemberInfo>> OrderedMembersCache = new Dictionary<Type, List<MemberInfo>>();
+        private readonly Dictionary<string, bool> _objectFoldouts = new Dictionary<string, bool>();
 
         public override void OnInspectorGUI()
         {
@@ -85,6 +87,13 @@ namespace XSystem.InternalEditor
             var value = field != null ? field.GetValue(target) : property.GetValue(target);
             var valueType = field != null ? field.FieldType : property.PropertyType;
             var canWrite = field != null ? !field.IsInitOnly : property.SetMethod != null;
+
+            if (ShouldDrawAsObject(value, valueType))
+            {
+                DrawObject(value, ObjectNames.NicifyVariableName(member.Name), member.Name, 0, new HashSet<object>());
+                return;
+            }
+
             EditorGUI.BeginChangeCheck();
             var newValue = DrawValue(ObjectNames.NicifyVariableName(member.Name), value, valueType, canWrite);
             var changed = EditorGUI.EndChangeCheck();
@@ -95,8 +104,14 @@ namespace XSystem.InternalEditor
             EditorUtility.SetDirty(target);
         }
 
-        private static object DrawValue(string label, object value, Type type, bool enabled)
+        private object DrawValue(string label, object value, Type type, bool enabled)
         {
+            if (ShouldDrawAsObject(value, type))
+            {
+                DrawObject(value, label, label, 0, new HashSet<object>());
+                return value;
+            }
+
             using (new EditorGUI.DisabledScope(!enabled))
             {
                 if (type == typeof(bool)) return EditorGUILayout.Toggle(label, value is bool v && v);
@@ -114,6 +129,83 @@ namespace XSystem.InternalEditor
                 EditorGUILayout.LabelField(label, value?.ToString() ?? "null");
                 return value;
             }
+        }
+
+        private void DrawObject(object value, string label, string path, int depth, HashSet<object> ancestors)
+        {
+            var foldoutKey = $"{target.GetInstanceID()}:{path}";
+            _objectFoldouts.TryGetValue(foldoutKey, out var expanded);
+            expanded = EditorGUILayout.Foldout(expanded, label, true);
+            _objectFoldouts[foldoutKey] = expanded;
+            if (!expanded) return;
+
+            if (depth >= MaxObjectDisplayDepth)
+            {
+                using (new EditorGUI.IndentLevelScope())
+                    EditorGUILayout.LabelField("Maximum display depth reached");
+                return;
+            }
+
+            if (!value.GetType().IsValueType && !ancestors.Add(value))
+            {
+                using (new EditorGUI.IndentLevelScope())
+                    EditorGUILayout.LabelField("Circular reference");
+                return;
+            }
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                foreach (var member in GetObjectMembers(value.GetType()))
+                {
+                    var memberLabel = ObjectNames.NicifyVariableName(member.Name);
+                    var memberPath = $"{path}.{member.Name}";
+                    try
+                    {
+                        var memberValue = member is FieldInfo field
+                            ? field.GetValue(value)
+                            : ((PropertyInfo)member).GetValue(value);
+                        var memberType = member is FieldInfo memberField
+                            ? memberField.FieldType
+                            : ((PropertyInfo)member).PropertyType;
+
+                        if (ShouldDrawAsObject(memberValue, memberType))
+                            DrawObject(memberValue, memberLabel, memberPath, depth + 1, ancestors);
+                        else
+                            DrawValue(memberLabel, memberValue, memberType, false);
+                    }
+                    catch (Exception exception)
+                    {
+                        EditorGUILayout.LabelField(memberLabel, $"Unavailable ({exception.GetType().Name})");
+                    }
+                }
+            }
+
+            if (!value.GetType().IsValueType)
+                ancestors.Remove(value);
+        }
+
+        private static bool ShouldDrawAsObject(object value, Type declaredType)
+        {
+            if (value == null || value is UnityEngine.Object || typeof(UnityEngine.Object).IsAssignableFrom(declaredType)) return false;
+
+            var type = value.GetType();
+            return !type.IsPrimitive
+                && !type.IsEnum
+                && type != typeof(string)
+                && type != typeof(decimal)
+                && type != typeof(Vector2)
+                && type != typeof(Vector3)
+                && type != typeof(Vector4)
+                && type != typeof(Color);
+        }
+
+        private static IEnumerable<MemberInfo> GetObjectMembers(Type type)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public;
+            return type.GetMembers(flags)
+                .Where(member => member is FieldInfo field && !field.IsStatic
+                    || member is PropertyInfo property && property.GetMethod != null && property.GetIndexParameters().Length == 0)
+                .OrderBy(member => member.MetadataToken);
         }
 
         private static List<MemberInfo> GetOrderedMembers(UnityEngine.Object target)
