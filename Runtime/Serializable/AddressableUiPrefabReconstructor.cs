@@ -21,9 +21,13 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
         [SerializeField] private Vector2 _anchorMax;
         [SerializeField] private Vector2 _anchoredPosition;
         [SerializeField] private Vector2 _sizeDelta;
+        [SerializeField] private Vector3 _anchoredPosition3D;
+        [SerializeField] private Vector2 _offsetMin;
+        [SerializeField] private Vector2 _offsetMax;
         [SerializeField] private Vector2 _pivot;
         [SerializeField] private Quaternion _localRotation = Quaternion.identity;
         [SerializeField] private Vector3 _localScale = Vector3.one;
+        [SerializeField] private bool _hasFullRectTransformSnapshot;
 
         public void Capture(RectTransform source)
         {
@@ -31,9 +35,13 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
             _anchorMax = source.anchorMax;
             _anchoredPosition = source.anchoredPosition;
             _sizeDelta = source.sizeDelta;
+            _anchoredPosition3D = source.anchoredPosition3D;
+            _offsetMin = source.offsetMin;
+            _offsetMax = source.offsetMax;
             _pivot = source.pivot;
             _localRotation = source.localRotation;
             _localScale = source.localScale;
+            _hasFullRectTransformSnapshot = true;
         }
 
         public void Apply(RectTransform target)
@@ -41,8 +49,14 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
             target.anchorMin = _anchorMin;
             target.anchorMax = _anchorMax;
             target.pivot = _pivot;
-            target.sizeDelta = _sizeDelta;
             target.anchoredPosition = _anchoredPosition;
+            target.sizeDelta = _sizeDelta;
+            if (_hasFullRectTransformSnapshot)
+            {
+                target.anchoredPosition3D = _anchoredPosition3D;
+                target.offsetMin = _offsetMin;
+                target.offsetMax = _offsetMax;
+            }
             target.localRotation = _localRotation;
             target.localScale = _localScale;
         }
@@ -139,7 +153,8 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
                 yield break;
             }
 
-            GameObject instance = UnityEngine.Object.Instantiate(handle.Result, _parent, false);
+            GameObject instance = UnityEngine.Object.Instantiate(handle.Result);
+            instance.transform.SetParent(_parent, false);
             instance.name = handle.Result.name;
             instance.SetActive(false);
             RectTransform rectTransform = instance.GetComponent<RectTransform>();
