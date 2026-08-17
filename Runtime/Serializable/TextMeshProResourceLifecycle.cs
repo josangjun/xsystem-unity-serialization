@@ -37,6 +37,32 @@ namespace XSystem.Internal
             "m_ColorGradientReferenceLookup",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
+        internal static void RegisterFontMaterial(
+            string materialName,
+            Material material,
+            bool replaceExisting)
+        {
+            if (string.IsNullOrEmpty(materialName) || material == null)
+            {
+                return;
+            }
+
+            int hashCode = TMP_TextUtilities.GetHashCode(materialName);
+            if (MaterialReferenceManager.TryGetMaterial(hashCode, out Material existingMaterial) == false)
+            {
+                MaterialReferenceManager.AddFontMaterial(hashCode, material);
+            }
+            else if (replaceExisting && existingMaterial != material)
+            {
+                if (fontMaterialLookupField?.GetValue(MaterialReferenceManager.instance) is IDictionary lookup)
+                {
+                    lookup.Remove(hashCode);
+                }
+
+                MaterialReferenceManager.AddFontMaterial(hashCode, material);
+            }
+        }
+
 #if UNITY_EDITOR
         static AddressableLoadHandle _editorHandle;
         static bool _editorInitializationScheduled;
@@ -279,15 +305,7 @@ namespace XSystem.Internal
                         continue;
                     }
 
-                    if (MaterialReferenceManager.TryGetMaterial(hashCode, out Material existingMaterial) == false)
-                    {
-                        MaterialReferenceManager.AddFontMaterial(hashCode, material);
-                    }
-                    else if (replaceExisting && existingMaterial != material)
-                    {
-                        RemoveKey(fontMaterialLookupField, hashCode);
-                        MaterialReferenceManager.AddFontMaterial(hashCode, material);
-                    }
+                    TextMeshProResourceLifecycle.RegisterFontMaterial(material.name, material, replaceExisting);
 
                     if (_registeredAssets.Contains(material) == false)
                     {
