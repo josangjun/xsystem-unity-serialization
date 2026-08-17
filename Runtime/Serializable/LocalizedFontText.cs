@@ -17,6 +17,7 @@ public sealed class LocalizedFontText : MonoBehaviour
     [SerializeField]
     private TMP_Text[] _texts = Array.Empty<TMP_Text>();
     private bool _isListening;
+    private bool _isReady;
     private int _fontRequestVersion;
 
     private const string SourceMaterialCacheSuffix = ".__LocalizedFontTextSource";
@@ -53,6 +54,15 @@ public sealed class LocalizedFontText : MonoBehaviour
     {
         _isListening = true;
         LocaleChanged += HandleLocaleChanged;
+        if (_isReady)
+        {
+            HandleLocaleChanged();
+        }
+    }
+
+    private void Start()
+    {
+        _isReady = true;
         HandleLocaleChanged();
     }
 
@@ -88,7 +98,7 @@ public sealed class LocalizedFontText : MonoBehaviour
 
     private void HandleLocaleChanged()
     {
-        if (_selectedLanguageCodeProvider == null || _fontLoader == null)
+        if (!_isReady || _selectedLanguageCodeProvider == null || _fontLoader == null)
         {
             return;
         }
@@ -130,7 +140,10 @@ public sealed class LocalizedFontText : MonoBehaviour
 
             TMP_FontAsset previousFont = text.font;
             Material previousBaseMaterial = text.fontSharedMaterial;
-            Material[] previousMaterials = text.fontSharedMaterials;
+            TMP_TextInfo textInfo = text.textInfo;
+            Material[] previousMaterials = textInfo != null && textInfo.materialCount > 0
+                ? text.fontSharedMaterials
+                : Array.Empty<Material>();
 
             Material compatibleBaseMaterial = GetCompatibleMaterial(
                 previousFont,
