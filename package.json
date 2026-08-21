@@ -3,6 +3,7 @@
   "displayName": "XSystem Serialization",
   "version": "1.0.0",
   "description": "Serializable containers, asset links, and inspector attributes for XSystem.",
+  "hideInEditor": false,
   "keywords": [
     "xsystem",
     "serialization",
