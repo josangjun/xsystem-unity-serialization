@@ -51,6 +51,9 @@ namespace XSystem
 
         public T Asset { get; private set; }
 
+        [System.NonSerialized]
+        private bool _isInstanceOperation;
+
         public SoftLink() { }
 
         public SoftLink(string guid)
@@ -72,7 +75,6 @@ namespace XSystem
 
         public void SyncPath()
         {
-            name = System.IO.Path.GetFileNameWithoutExtension(path);
 #if UNITY_EDITOR
             if (!string.IsNullOrEmpty(guid))
             {
@@ -80,6 +82,9 @@ namespace XSystem
                 EditorExtension.MakeAddressFromGUID(guid);
             }
 #endif
+            name = string.IsNullOrEmpty(path)
+                ? string.Empty
+                : System.IO.Path.GetFileNameWithoutExtension(path);
         }
 
         [System.NonSerialized]
@@ -90,8 +95,17 @@ namespace XSystem
             try
             {
                 if (OperationHandle.IsValid())
+                {
+                    if (_isInstanceOperation)
+                    {
+                        Debug.LogError($"Cannot load '{name}' while an instance operation is active. Release the instance first.");
+                        return default;
+                    }
+
                     return OperationHandle.Convert<T>();
-                var key = string.IsNullOrEmpty(guid) ? path : guid;
+                }
+
+                var key = GetRuntimeKey();
                 if (string.IsNullOrEmpty(key))
                 {
 #if UNITY_EDITOR
@@ -110,20 +124,21 @@ namespace XSystem
                             muteWarning = true;
                         }
                     }
-                    Asset = h.Result;
+                    Asset = h.Status == AsyncOperationStatus.Succeeded ? h.Result : null;
                 };
                 if (asyncOp.IsDone)
                     onComplete.Invoke(asyncOp);
                 else
                     asyncOp.Completed += onComplete;
 
+                _isInstanceOperation = false;
                 OperationHandle = asyncOp;
                 return asyncOp;
             }
             catch (System.Exception ex)
             {
                 Debug.LogError($"{ex.Message}: {name}, {path}");
-                throw ex;
+                throw;
             }
         }
 
@@ -131,7 +146,13 @@ namespace XSystem
         {
             try
             {
-                var key = !string.IsNullOrEmpty(path) ? path : guid;
+                if (OperationHandle.IsValid())
+                {
+                    Debug.LogError($"Cannot instantiate '{name}' while another operation is active. Release it first.");
+                    return default;
+                }
+
+                var key = GetRuntimeKey();
                 if (string.IsNullOrEmpty(key))
                 {
 #if UNITY_EDITOR
@@ -149,10 +170,27 @@ namespace XSystem
                             Debug.LogWarning($"key:{key}, {h.OperationException}");
                             muteWarning = true;
                         }
+
+                        Asset = null;
+                        return;
                     }
+
                     var go = h.Result;
-                    go.name = name;
-                    Asset = go.GetComponent<T>();
+                    if (go == null)
+                    {
+                        Asset = null;
+                        return;
+                    }
+
+                    if (!string.IsNullOrEmpty(name))
+                        go.name = name;
+
+                    if (typeof(T) == typeof(GameObject))
+                        Asset = go as T;
+                    else if (typeof(Component).IsAssignableFrom(typeof(T)))
+                        Asset = go.GetComponent(typeof(T)) as T;
+                    else
+                        Asset = null;
                 };
                 if (asyncOp.IsDone)
                 {
@@ -161,39 +199,74 @@ namespace XSystem
                 else
                     asyncOp.Completed += onComplete;
 
+                _isInstanceOperation = true;
                 OperationHandle = asyncOp;
                 return asyncOp;
             }
             catch (System.Exception ex)
             {
                 Debug.LogError($"{ex.Message}: {name}, {path}");
-                throw ex;
+                throw;
             }
         }
 
         public void ReleaseInstance()
         {
-            if (OperationHandle.IsValid())
+            if (!OperationHandle.IsValid())
             {
-                Addressables.ReleaseInstance(OperationHandle);
-                OperationHandle = default;
+                Asset = null;
+                return;
             }
+
+            if (!_isInstanceOperation)
+            {
+                Debug.LogWarning($"'{name}' has an asset load operation. Call ReleaseAsset instead.");
+                return;
+            }
+
+            Addressables.ReleaseInstance(OperationHandle);
+            OperationHandle = default;
+            _isInstanceOperation = false;
             Asset = null;
         }
 
         public void ReleaseAsset()
         {
-            if (OperationHandle.IsValid())
+            if (!OperationHandle.IsValid())
             {
-                Addressables.Release(OperationHandle);
-                OperationHandle = default;
+                Asset = null;
+                return;
             }
+
+            if (_isInstanceOperation)
+            {
+                Debug.LogWarning($"'{name}' has an instance operation. Call ReleaseInstance instead.");
+                return;
+            }
+
+            Addressables.Release(OperationHandle);
+            OperationHandle = default;
             Asset = null;
+        }
+
+        private string GetRuntimeKey()
+        {
+            return string.IsNullOrEmpty(guid) ? path : guid;
         }
 
         public bool Equals(SoftLink<T> other)
         {
-            return guid == other.guid;
+            return other != null && string.Equals(guid, other.guid, StringComparison.Ordinal);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is SoftLink<T> other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return guid == null ? 0 : StringComparer.Ordinal.GetHashCode(guid);
         }
     }
 

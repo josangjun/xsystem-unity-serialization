@@ -117,7 +117,7 @@ namespace XSystem
                 EditorGUI.BeginChangeCheck();
                 var alloc = EditorGUI.ObjectField(position, label, asset, objType, false);
                 var changed = EditorGUI.EndChangeCheck();
-                
+
                 if (isComponent && alloc)
                 {
                     var go = alloc as GameObject;
@@ -183,8 +183,7 @@ namespace XSystem
         public static bool HasAddress(string guid)
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;
-            var entry = settings.FindAssetEntry(guid);
-            return entry != null;
+            return settings != null && settings.FindAssetEntry(guid) != null;
         }
 
         public static bool MakeAddressFromGUID(string guid)
@@ -192,9 +191,11 @@ namespace XSystem
             var h = Addressables.LoadResourceLocationsAsync(guid, null);
             var locations = h.WaitForCompletion();
             Addressables.Release(h);
-            if (locations.Count > 0)
+            if (locations != null && locations.Count > 0)
                 return false;
             var settings = AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null)
+                return false;
             var entry = settings.FindAssetEntry(guid);
             if (entry != null)
                 return false;
