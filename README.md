@@ -1,6 +1,6 @@
 # XSystem Serialization
 
-Reusable serialized containers, soft asset links, and inspector attributes for Unity projects.
+Reusable serialized containers, Addressables-backed asset links, and inspector attributes for Unity projects.
 
 The public API remains in the `XSystem` namespace.
 
@@ -19,7 +19,7 @@ public float CurrentSpeed => _currentSpeed;
 `xsystem.serialization` contains Unity-focused serialization utilities that are useful without the rest of XSystem Framework.
 
 * `SerializedDictionary<TKey, TValue>` serializes dictionary data through parallel key and value lists, with an inspector drawer for editing entries.
-* `SoftLink<T>` and `AssetLink<T>` store asset references as GUID-based links and load them through Addressables.
+* `AssetLink<T>` extends Unity Addressables' `AssetReferenceT<T>` with a typed `Asset` interface for shared link consumers.
 * `PageAttribute` and `SearchableAttribute` add pagination and text filtering to supported collection fields in the Unity Inspector.
 
 The package includes the required custom property drawers, so these types and attributes work directly in the Unity Inspector after installation.
