@@ -23,19 +23,95 @@ namespace XSystem.Internal
 #endif
     public static class TextMeshProResourceLifecycle
     {
-        static readonly FieldInfo settingsFieldInfo;
-        static readonly FieldInfo fontAssetLookupField = typeof(MaterialReferenceManager).GetField(
+        const BindingFlags InstancePrivateFlags = BindingFlags.NonPublic | BindingFlags.Instance;
+        const BindingFlags StaticPrivateFlags = BindingFlags.NonPublic | BindingFlags.Static;
+
+        static readonly FieldInfo settingsFieldInfo = FindField(
+            typeof(TMP_Settings),
+            "s_Instance",
+            StaticPrivateFlags,
+            typeof(TMP_Settings));
+        static readonly FieldInfo fontAssetLookupField = FindLookupField(
             "m_FontAssetReferenceLookup",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        static readonly FieldInfo fontMaterialLookupField = typeof(MaterialReferenceManager).GetField(
+            typeof(TMP_FontAsset));
+        static readonly FieldInfo fontMaterialLookupField = FindLookupField(
             "m_FontMaterialReferenceLookup",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        static readonly FieldInfo spriteAssetLookupField = typeof(MaterialReferenceManager).GetField(
+            typeof(Material));
+        static readonly FieldInfo spriteAssetLookupField = FindLookupField(
             "m_SpriteAssetReferenceLookup",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        static readonly FieldInfo colorGradientLookupField = typeof(MaterialReferenceManager).GetField(
+            typeof(TMP_SpriteAsset));
+        static readonly FieldInfo colorGradientLookupField = FindLookupField(
             "m_ColorGradientReferenceLookup",
-            BindingFlags.NonPublic | BindingFlags.Instance);
+            typeof(TMP_ColorGradient));
+
+        static FieldInfo FindField(
+            Type ownerType,
+            string expectedName,
+            BindingFlags flags,
+            Type expectedFieldType)
+        {
+            FieldInfo field = ownerType.GetField(expectedName, flags);
+            if (field != null && expectedFieldType.IsAssignableFrom(field.FieldType))
+            {
+                return field;
+            }
+
+            FieldInfo[] compatibleFields = ownerType
+                .GetFields(flags)
+                .Where(candidate => expectedFieldType.IsAssignableFrom(candidate.FieldType))
+                .ToArray();
+            if (compatibleFields.Length == 1)
+            {
+                Debug.LogWarning(
+                    $"{ownerType.FullName}.{expectedName} was not found. Using compatible field " +
+                    $"{compatibleFields[0].Name} instead.");
+                return compatibleFields[0];
+            }
+
+            Debug.LogError(
+                $"{ownerType.FullName}.{expectedName} was not found and no unique compatible field exists.");
+            return null;
+        }
+
+        static FieldInfo FindLookupField(string expectedName, Type valueType)
+        {
+            Type ownerType = typeof(MaterialReferenceManager);
+            FieldInfo field = ownerType.GetField(expectedName, InstancePrivateFlags);
+            if (field != null && IsIntegerDictionary(field.FieldType, valueType))
+            {
+                return field;
+            }
+
+            FieldInfo[] compatibleFields = ownerType
+                .GetFields(InstancePrivateFlags)
+                .Where(candidate => IsIntegerDictionary(candidate.FieldType, valueType))
+                .ToArray();
+            if (compatibleFields.Length == 1)
+            {
+                Debug.LogWarning(
+                    $"{ownerType.FullName}.{expectedName} was not found. Using compatible field " +
+                    $"{compatibleFields[0].Name} instead.");
+                return compatibleFields[0];
+            }
+
+            Debug.LogError(
+                $"{ownerType.FullName}.{expectedName} was not found and no unique " +
+                $"Dictionary<int, {valueType.Name}> field exists.");
+            return null;
+        }
+
+        static bool IsIntegerDictionary(Type fieldType, Type valueType)
+        {
+            if (fieldType.IsGenericType == false)
+            {
+                return false;
+            }
+
+            Type[] arguments = fieldType.GetGenericArguments();
+            return arguments.Length == 2 &&
+                   arguments[0] == typeof(int) &&
+                   arguments[1] == valueType;
+        }
 
         internal static bool RegisterFontMaterial(
             string materialName,
@@ -404,10 +480,12 @@ namespace XSystem.Internal
                 {
                     if (asset is TMP_FontAsset fontAsset)
                     {
+                        #if UNITY_6000_6_OR_NEWER
                         if (_fontAssetsWithOwnedMaterialReferences.Contains(fontAsset))
                         {
                             TMP_ResourceManager.RemoveFontAsset(fontAsset);
                         }
+                        #endif
 
                         RemoveKey(fontAssetLookupField, fontAsset.hashCode);
                     }
@@ -463,24 +541,30 @@ namespace XSystem.Internal
 
         public static TMP_Settings settings
         {
-            get => (TMP_Settings)settingsFieldInfo.GetValue(null);
-            set => settingsFieldInfo.SetValue(null, value);
+            get => settingsFieldInfo == null ? null : (TMP_Settings)settingsFieldInfo.GetValue(null);
+            set
+            {
+                if (settingsFieldInfo == null)
+                {
+                    Debug.LogError("TMP_Settings.s_Instance reflection field is unavailable.");
+                    return;
+                }
+
+                settingsFieldInfo.SetValue(null, value);
+            }
         }
 
-#if XSYS_ADDRESSABLE_TMPRO
         static TextMeshProResourceLifecycle()
         {
-            settingsFieldInfo = typeof(TMP_Settings).GetField("s_Instance", BindingFlags.NonPublic | BindingFlags.Static);
-            Debug.Assert(settingsFieldInfo != null, nameof(settingsFieldInfo) + " != null");
-
+#if XSYS_ADDRESSABLE_TMPRO
 #if UNITY_EDITOR
             if (Application.isPlaying == false)
             {
                 InitializeEditor();
             }
 #endif
-        }
 #endif
+        }
 
         private static AddressableLoadHandle _textMeshProHandle;
         
@@ -576,6 +660,37 @@ namespace XSystem.Internal
             }
             #endif
         }
+
+#if XSYS_ADDRESSABLE_TMPRO
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterAssembliesLoaded)]
+        static void RestoreAddressableSettingsAfterAssembliesLoaded()
+        {
+            TMP_Settings loadedSettings = FindEditorSettings();
+            if (loadedSettings == null)
+            {
+                return;
+            }
+
+            if (_editorHandle == null)
+            {
+                _editorHandle = AddressableLoadHandle.CreateEditor(
+                    loadedSettings,
+                    LoadEditorResources<TMP_FontAsset>(),
+                    LoadEditorMaterials(),
+                    LoadEditorResources<TMP_SpriteAsset>(),
+                    LoadEditorResources<TMP_ColorGradient>());
+            }
+            else
+            {
+                settings = loadedSettings;
+                _editorHandle.RefreshEditorAssets(
+                    LoadEditorResources<TMP_FontAsset>(),
+                    LoadEditorMaterials(),
+                    LoadEditorResources<TMP_SpriteAsset>(),
+                    LoadEditorResources<TMP_ColorGradient>());
+            }
+        }
+#endif
 
         static void ScheduleEditorInitialization()
         {

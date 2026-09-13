@@ -130,10 +130,19 @@ namespace XSystem.InternalEditor
                 return value;
             }
         }
+        
+        private string GetFoldoutKey(string path)
+        {
+            #if UNITY_6000_6_OR_NEWER
+            return $"{target.GetEntityId()}:{path}";
+            #else
+            return $"{target.GetInstanceID()}:{path}";
+            #endif
+        }
 
         private void DrawObject(object value, string label, string path, int depth, HashSet<object> ancestors)
         {
-            var foldoutKey = $"{target.GetInstanceID()}:{path}";
+            var foldoutKey = GetFoldoutKey(path);
             _objectFoldouts.TryGetValue(foldoutKey, out var expanded);
             expanded = EditorGUILayout.Foldout(expanded, label, true);
             _objectFoldouts[foldoutKey] = expanded;

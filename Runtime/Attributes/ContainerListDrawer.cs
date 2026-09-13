@@ -364,7 +364,11 @@ namespace XSystem.InternalEditor
 
         private static string GetKey(SerializedProperty property)
         {
+            #if UNITY_6000_6_OR_NEWER
+            return $"{property.serializedObject.targetObject.GetEntityId()}:{property.propertyPath}";
+            #else
             return $"{property.serializedObject.targetObject.GetInstanceID()}:{property.propertyPath}";
+            #endif
         }
 
         private static void DeleteArrayElement(SerializedProperty arrayProperty, int index)
