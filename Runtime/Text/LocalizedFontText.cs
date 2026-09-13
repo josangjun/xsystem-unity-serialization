@@ -156,7 +156,7 @@ public sealed class LocalizedFontText : MonoBehaviour
                 {
                     if (previousMaterials[materialIndex] == null ||
                         previousBaseMaterial != null &&
-                        previousMaterials[materialIndex].GetInstanceID() == previousBaseMaterial.GetInstanceID())
+                        previousMaterials[materialIndex].GetEntityId() == previousBaseMaterial.GetEntityId())
                     {
                         continue;
                     }
@@ -181,7 +181,7 @@ public sealed class LocalizedFontText : MonoBehaviour
         return font != null &&
                font.material != null &&
                material != null &&
-               material.GetInstanceID() != font.material.GetInstanceID();
+               material.GetEntityId() != font.material.GetEntityId();
     }
 
     private static Material GetCompatibleMaterial(

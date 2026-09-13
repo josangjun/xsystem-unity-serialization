@@ -133,7 +133,7 @@ namespace XSystem.InternalEditor
 
         private void DrawObject(object value, string label, string path, int depth, HashSet<object> ancestors)
         {
-            var foldoutKey = $"{target.GetInstanceID()}:{path}";
+            var foldoutKey = $"{target.GetEntityId()}:{path}";
             _objectFoldouts.TryGetValue(foldoutKey, out var expanded);
             expanded = EditorGUILayout.Foldout(expanded, label, true);
             _objectFoldouts[foldoutKey] = expanded;
