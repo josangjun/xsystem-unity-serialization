@@ -280,7 +280,10 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
         _runtimeInstances.Clear();
         foreach (AsyncOperationHandle<GameObject> handle in _runtimeAssetHandles)
         {
-            Addressables.Release(handle);
+            if (handle.IsValid())
+            {
+                Addressables.Release(handle);
+            }
         }
 
         _runtimeAssetHandles.Clear();
