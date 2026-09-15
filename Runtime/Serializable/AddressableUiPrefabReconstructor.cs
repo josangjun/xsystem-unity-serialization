@@ -93,6 +93,7 @@ public sealed class AddressableUiPrefabReconstructor : MonoBehaviour
                     _editorOnlyInstance.tag = "EditorOnly";
             }
 #endif
+            _parent = _editorOnlyInstance.parent;
             _siblingIndex = _editorOnlyInstance.GetSiblingIndex();
             _transform ??= new RectTransformSnapshot();
             _transform.Capture(_editorOnlyInstance);
