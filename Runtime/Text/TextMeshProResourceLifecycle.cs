@@ -37,30 +37,35 @@ namespace XSystem.Internal
             "m_ColorGradientReferenceLookup",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        internal static void RegisterFontMaterial(
+        internal static bool RegisterFontMaterial(
             string materialName,
             Material material,
             bool replaceExisting)
         {
             if (string.IsNullOrEmpty(materialName) || material == null)
             {
-                return;
+                return false;
             }
 
             int hashCode = TMP_TextUtilities.GetHashCode(materialName);
             if (MaterialReferenceManager.TryGetMaterial(hashCode, out Material existingMaterial) == false)
             {
                 MaterialReferenceManager.AddFontMaterial(hashCode, material);
+                return true;
             }
-            else if (replaceExisting && existingMaterial != material)
-            {
-                if (fontMaterialLookupField?.GetValue(MaterialReferenceManager.instance) is IDictionary lookup)
-                {
-                    lookup.Remove(hashCode);
-                }
 
-                MaterialReferenceManager.AddFontMaterial(hashCode, material);
+            if (existingMaterial == material || replaceExisting == false)
+            {
+                return false;
             }
+
+            if (fontMaterialLookupField?.GetValue(MaterialReferenceManager.instance) is IDictionary lookup)
+            {
+                lookup.Remove(hashCode);
+            }
+
+            MaterialReferenceManager.AddFontMaterial(hashCode, material);
+            return true;
         }
 
 #if UNITY_EDITOR
@@ -271,7 +276,9 @@ namespace XSystem.Internal
 
             void RegisterFontAsset(TMP_FontAsset fontAsset)
             {
-                if (fontAsset == null || _registeredAssets.Contains(fontAsset))
+                if (fontAsset == null ||
+                    _registeredAssets.Contains(fontAsset) ||
+                    MaterialReferenceManager.TryGetFontAsset(fontAsset.hashCode, out _))
                 {
                     return;
                 }
@@ -305,12 +312,12 @@ namespace XSystem.Internal
                         continue;
                     }
 
-                    TextMeshProResourceLifecycle.RegisterFontMaterial(material.name, material, replaceExisting);
-
-                    if (_registeredAssets.Contains(material) == false)
+                    if (TextMeshProResourceLifecycle.RegisterFontMaterial(material.name, material, replaceExisting) == false)
                     {
-                        _registeredAssets.Add(material);
+                        continue;
                     }
+
+                    _registeredAssets.Add(material);
                 }
             }
 
