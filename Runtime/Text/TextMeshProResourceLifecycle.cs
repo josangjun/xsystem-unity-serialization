@@ -82,6 +82,7 @@ namespace XSystem.Internal
             readonly AsyncOperationHandle<IList<TMP_SpriteAsset>> _spriteAssetsHandle;
             readonly AsyncOperationHandle<IList<TMP_ColorGradient>> _colorGradientsHandle;
             readonly List<UnityEngine.Object> _registeredAssets = new();
+            readonly HashSet<TMP_FontAsset> _fontAssetsWithOwnedMaterialReferences = new();
 
             TMP_Settings _loadedSettings;
             bool _released;
@@ -283,12 +284,36 @@ namespace XSystem.Internal
                     return;
                 }
 
+                if (fontAsset.material != null &&
+                    MaterialReferenceManager.TryGetMaterial(fontAsset.materialHashCode, out _))
+                {
+                    if (RegisterFontAssetReference(fontAsset))
+                    {
+                        _registeredAssets.Add(fontAsset);
+                    }
+
+                    return;
+                }
+
                 MaterialReferenceManager.AddFontAsset(fontAsset);
                 _registeredAssets.Add(fontAsset);
                 if (fontAsset.material != null)
                 {
                     _registeredAssets.Add(fontAsset.material);
+                    _fontAssetsWithOwnedMaterialReferences.Add(fontAsset);
                 }
+            }
+
+            static bool RegisterFontAssetReference(TMP_FontAsset fontAsset)
+            {
+                if (fontAssetLookupField?.GetValue(MaterialReferenceManager.instance) is not IDictionary lookup ||
+                    lookup.Contains(fontAsset.hashCode))
+                {
+                    return false;
+                }
+
+                lookup.Add(fontAsset.hashCode, fontAsset);
+                return true;
             }
 
             void RegisterMaterials(IList<Material> materials, bool replaceExisting)
@@ -379,9 +404,12 @@ namespace XSystem.Internal
                 {
                     if (asset is TMP_FontAsset fontAsset)
                     {
-                        TMP_ResourceManager.RemoveFontAsset(fontAsset);
+                        if (_fontAssetsWithOwnedMaterialReferences.Contains(fontAsset))
+                        {
+                            TMP_ResourceManager.RemoveFontAsset(fontAsset);
+                        }
+
                         RemoveKey(fontAssetLookupField, fontAsset.hashCode);
-                        RemoveMatchingValue(fontMaterialLookupField, fontAsset.material);
                     }
                     else if (asset is TMP_SpriteAsset spriteAsset)
                     {
@@ -399,6 +427,7 @@ namespace XSystem.Internal
                 }
 
                 _registeredAssets.Clear();
+                _fontAssetsWithOwnedMaterialReferences.Clear();
             }
 
             static void RemoveKey(FieldInfo lookupField, object key)
