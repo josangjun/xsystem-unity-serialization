@@ -24,6 +24,25 @@ public float CurrentSpeed => _currentSpeed;
 
 필요한 커스텀 Property Drawer가 패키지에 포함되어 있으므로, 설치 후 해당 타입과 특성을 Unity Inspector에서 바로 사용할 수 있습니다.
 
+## Inspector 특성
+
+* `[ShowInInspector]`는 직렬화되지 않은 필드와 프로퍼티를 Unity Inspector에 표시합니다. setter가 없는 프로퍼티는 읽기 전용으로 표시됩니다.
+* `[Page]`는 지원되는 컬렉션 필드의 항목을 페이지로 나눕니다. `[Page(20)]`처럼 항목 수를 지정할 수 있으며, 기본값은 페이지당 10개입니다.
+* `[Searchable]`은 지원되는 컬렉션 필드에 텍스트 검색 필터를 표시합니다. `[Page]`와 함께 사용하면 검색 결과에도 페이지 나누기가 적용됩니다.
+* `[AssetLinkHeight(48f)]`는 Unity Inspector에서 해당 `AssetLink<T>` 필드의 표시 높이를 지정합니다. 지정하지 않으면 기본 높이를 사용합니다.
+
+```csharp
+using System.Collections.Generic;
+using UnityEngine;
+using XSystem;
+
+[SerializeField, Page(20), Searchable]
+private List<string> _items;
+
+[SerializeField, AssetLinkHeight(48f)]
+private AssetLink<Texture2D> _thumbnail;
+```
+
 ## Git에서 설치
 
 `[xsystem-unity-serialization](https://github.com/josangjun/xsystem-unity-serialization)` 저장소에서 패키지를 설치합니다.

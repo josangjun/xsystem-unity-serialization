@@ -104,3 +104,8 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+/graft.meta
+.ignore

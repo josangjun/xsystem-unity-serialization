@@ -14,13 +14,13 @@ namespace XSystem
         protected SerializedProperty subObjectNameProp;
         protected SerializedProperty subObjectTypeProp;
 
-        private ResourceAnchorAttribute _anchorAttribute;
+        private AssetLinkHeightAttribute _heightAttribute;
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
             var type = GetFieldType();
-            if (_anchorAttribute != null && _anchorAttribute.height > 0f)
-                return _anchorAttribute.height;
+            if (_heightAttribute != null && _heightAttribute.Height > 0f)
+                return _heightAttribute.Height;
 
             if (type != null && type.IsSubclassOf(typeof(Texture)))
                 return 48f;
@@ -30,10 +30,7 @@ namespace XSystem
 
         protected virtual Type GetFieldType()
         {
-            _anchorAttribute = attribute as ResourceAnchorAttribute;
-            if (_anchorAttribute != null)
-                return _anchorAttribute.type;
-
+            _heightAttribute = attribute as AssetLinkHeightAttribute;
             return GetAssetType(fieldInfo?.FieldType) ?? typeof(Object);
         }
 
