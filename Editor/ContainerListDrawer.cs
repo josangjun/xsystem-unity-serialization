@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 namespace XSystem.InternalEditor
 {
     using System;
@@ -480,4 +479,3 @@ namespace XSystem.InternalEditor
         }
     }
 }
-#endif
